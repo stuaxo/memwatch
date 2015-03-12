@@ -117,6 +117,9 @@ if __name__=='__main__':
     parser.add_argument('-P', '--minphy', action='store', default=0)
     parser.add_argument('-V', '--minvm', action='store', default=0)
     parser.add_argument('-L', '--linetrace', action='store_true')
+    parser.add_argument('script', action='store', type=str)
+    parser.add_argument('args', nargs='*', default=list())
+    #parser.add_argument('[args]', action='store', default=[])
 
     args, script_args = parser.parse_known_args()
     arg_dict =vars(args)    
@@ -129,13 +132,9 @@ if __name__=='__main__':
             linetrace=args.linetrace,
             **bytes_kwargs)
 
-        if not script_args:
-            print('Specify script')
-            sys.exit(1)
-
-        script=script_args[0]
+        script=arg_dict.get('script')
+        sys.argv = [script] + arg_dict.get('args')
         with open(script) as f:
-            sys.argv = script_args
             sys.settrace(dw.trace)
             try:
                 exec(f, None, None)
