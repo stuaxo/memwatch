@@ -4,10 +4,8 @@ def eat_mb(mb):
     for i in range(0, mb):
         b=one_m * i
         print '%s mb' % (i +1)
+    print 'success - used %s mb' % mb
 
 
 if __name__=='__main__':
     eat_mb(128) # use 128 mb
-
-
-
