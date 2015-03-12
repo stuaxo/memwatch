@@ -37,4 +37,10 @@ optional arguments:
   -L, --linetrace
   ```
   
-  memwatch accepts G, M, K suffixes for memory sizes, while ulimit works with Kilobyres.
+memwatch accepts G, M, K suffixes for memory sizes, while ulimit works with Kilobytes.
+  
+  
+Thanks
+------
+  
+Information was used from various stack overflow posts, PyMOTW and dalkescientific - see code for links to sources.
