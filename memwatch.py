@@ -69,6 +69,7 @@ class DieWhen(object):
         self.kwargs=kwargs
         self.p = psutil.Process()
         self.killfuncs = []  # func, failure_message
+        self.headers_shown=False
 
         for name, die_func, msg in DieWhen.func_lookup:
             value=kwargs.get(name, 0)
@@ -79,7 +80,9 @@ class DieWhen(object):
                 msg = msg or '%s failed' % die_func.__name__
                 self.killfuncs.append([die_func, msg])
 
-
+    def print_headers(self):
+        sys.stderr.write('RSS:VMS:file:line:source\n')
+        self.headers_shown=True
 
     def trace(self, frame, event, arg):
         # http://pymotw.com/2/sys/tracing.html#sys-tracing
@@ -101,11 +104,19 @@ class DieWhen(object):
                 filename = filename[:-1]
             name = frame.f_globals["__name__"]
             line = linecache.getline(filename, lineno)
-            print("%s:%s: %s" % (filename, lineno, line.rstrip()))
+            if not self.headers_shown:
+                self.print_headers()
+            print("%s:%s:%s:%s: %s" % ( \
+                bytes2human(self.p.memory_info().rss), \
+                bytes2human(self.p.memory_info().vms), \
+                filename, \
+                lineno, \
+                line.rstrip()))
 
         for f, msg in self.killfuncs:
             if f(self):
                 msg=msg.format(**self.kwargs)
+                self.print_headers()
                 raise ConditionalException(msg)
 
         return self.trace
