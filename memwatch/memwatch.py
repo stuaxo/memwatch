@@ -4,7 +4,10 @@ import psutil
 import sys
 
 from collections import OrderedDict
+from colorama import Fore, Back, Style
 
+
+DEFAULT_IGNORE_MODULES=['sre_compile', 'sre_parse', 'opcode']
 
 # http://goo.gl/zeJZl
 def human2bytes(s):
@@ -58,9 +61,9 @@ class DieWhen(object):
     # exception conditions
     # name, func, error_message
     func_lookup=[
-        ('maxrss', lambda dw: dw.p.memory_info().rss > dw.maxrss, 'RSS Exceeded {maxrss} bytes [{human_maxrss}]'),
-        ('maxvms', lambda dw: dw.p.memory_info().vms > dw.maxvms, 'VMS Exceeded {maxvms} bytes [{human_maxvms}]'),
-        ('maxpc',  lambda dw: dw.p.memory_percent() > dw.maxpc, None),
+        ('maxrss', lambda dw: dw.mem_info.rss > dw.maxrss, 'RSS Exceeded {maxrss} bytes [{human_maxrss}]'),
+        ('maxvms', lambda dw: dw.mem_info.vms > dw.maxvms, 'VMS Exceeded {maxvms} bytes [{human_maxvms}]'),
+        ('maxpc',  lambda dw: dw.mem_percent > dw.maxpc, None),
         ('minvm',  lambda dw: -1, None),
         ('minphy', lambda dw: -1, None),
     ]
@@ -70,6 +73,23 @@ class DieWhen(object):
         self.p = psutil.Process()
         self.killfuncs = []  # func, failure_message
         self.headers_shown=False
+
+        self.linetrace = bool(kwargs.get('linetrace'))
+        self.ignore_modules = set(kwargs.get('ignore_modules', []))
+        if kwargs.get('tracefrom'):
+            # TODO - move this logic outside this class
+            module, _, line = kwargs.get('tracefrom').partition(":")
+            self.tracefrom_module = module
+            if line != '':
+                self.tracefrom_lineno = int(line)
+            else:
+                self.tracefrom_lineno = None
+
+            self.tracing = False
+        else:
+            self.tracefrom_module = None
+            self.tracefrom_lineno = None
+            self.tracing = True
 
         for name, die_func, msg in DieWhen.func_lookup:
             value=kwargs.get(name, 0)
@@ -88,31 +108,46 @@ class DieWhen(object):
         # http://pymotw.com/2/sys/tracing.html#sys-tracing
         # http://www.dalkescientific.com/writings/diary/archive/2005/04/20/tracing_python_code.html
 
+        self.mem_info = self.p.memory_info()
+        self.mem_info_ex = self.p.memory_info_ex()
+        self.mem_percent = self.p.memory_percent()
+        
         co = frame.f_code
         func_name = co.co_name
         if func_name == 'write':
             # Ignore write() calls from print statements
             return
 
-        elif event == 'line' and self.kwargs.get('linetrace'):
+        elif event == 'line' and self.linetrace:
             lineno = frame.f_lineno
-            filename = frame.f_globals["__file__"]
-            if filename == "<stdin>":
-                filename = "traceit.py"
+            filename = frame.f_globals.get("__file__", "__code__")
+            #if filename == "<stdin>":
+            #    filename = "traceit.py"
             if (filename.endswith(".pyc") or
                 filename.endswith(".pyo")):
                 filename = filename[:-1]
-            name = frame.f_globals["__name__"]
+            name = frame.f_globals.get("__name__", None)
             line = linecache.getline(filename, lineno)
-            if not self.headers_shown:
-                self.print_headers()
-            print("%s:%s:%s:%s: %s" % ( \
-                bytes2human(self.p.memory_info().rss), \
-                bytes2human(self.p.memory_info().vms), \
-                filename, \
-                lineno, \
-                line.rstrip()))
 
+            if not self.tracing and name != 'sre_compile' and name != 'sre_parse' and name != 'opcode':
+                if (self.tracefrom_module is not None and self.tracefrom_module == name) and \
+                    (self.tracefrom_lineno == lineno or self.tracefrom_lineno == None):
+                    self.tracing = True
+
+            if self.tracing and name not in self.ignore_modules:
+                if not self.headers_shown:
+                    self.print_headers()
+                print("%s:%s:%s:%s: %s" % ( \
+                    bytes2human(self.mem_info.rss), \
+                    bytes2human(self.mem_info.vms), \
+                    name, \
+                    lineno, \
+                    line.rstrip()))
+        
+        self.last_meminfo = self.mem_info
+        self.last_meminfo_ex = self.mem_info_ex
+        self.last_mem_percent = self.mem_percent
+        
         for f, msg in self.killfuncs:
             if f(self):
                 msg=msg.format(**self.kwargs)
@@ -122,6 +157,7 @@ class DieWhen(object):
         return self.trace
 
 def main():
+    global DEFAULT_IGNORE_MODULES
     parser = argparse.ArgumentParser()
     parser.add_argument('-r', '--maxrss', action='store', default=0)
     parser.add_argument('-v', '--maxvms', action='store', default=0)
@@ -129,9 +165,9 @@ def main():
     parser.add_argument('-P', '--minphy', action='store', default=0)
     parser.add_argument('-V', '--minvm', action='store', default=0)
     parser.add_argument('-L', '--linetrace', action='store_true')
+    parser.add_argument('-f', '--tracefrom', action='store')
     parser.add_argument('script', action='store', type=str)
     parser.add_argument('args', nargs='*', default=list())
-    #parser.add_argument('[args]', action='store', default=[])
 
     args, script_args = parser.parse_known_args()
     arg_dict =vars(args)    
@@ -139,9 +175,12 @@ def main():
         print(parser.print_help())
     else:
         bytes_kwargs = { k: human2bytes(arg_dict.get(k)) for k in ['maxrss', 'maxvms', 'minphy', 'minvm'] }
+        ignore_modules=DEFAULT_IGNORE_MODULES
         dw = DieWhen(
             maxpc=args.maxpc,
+            tracefrom=args.tracefrom,
             linetrace=args.linetrace,
+            ignore_modules=ignore_modules,
             **bytes_kwargs)
 
         script=arg_dict.get('script')
