@@ -81,9 +81,10 @@ class DieWhen(object):
 
 
 
-    # http://pymotw.com/2/sys/tracing.html#sys-tracing
-    # http://www.dalkescientific.com/writings/diary/archive/2005/04/20/tracing_python_code.html
     def trace(self, frame, event, arg):
+        # http://pymotw.com/2/sys/tracing.html#sys-tracing
+        # http://www.dalkescientific.com/writings/diary/archive/2005/04/20/tracing_python_code.html
+
         co = frame.f_code
         func_name = co.co_name
         if func_name == 'write':
@@ -100,7 +101,7 @@ class DieWhen(object):
                 filename = filename[:-1]
             name = frame.f_globals["__name__"]
             line = linecache.getline(filename, lineno)
-            print("%s:%s: %s" % (name, lineno, line.rstrip()))
+            print("%s:%s: %s" % (filename, lineno, line.rstrip()))
 
         for f, msg in self.killfuncs:
             if f(self):
@@ -124,7 +125,7 @@ if __name__=='__main__':
     args, script_args = parser.parse_known_args()
     arg_dict =vars(args)    
     if not any(arg_dict.values()):
-        print parser.print_help()
+        print(parser.print_help())
     else:
         bytes_kwargs = { k: human2bytes(arg_dict.get(k)) for k in ['maxrss', 'maxvms', 'minphy', 'minvm'] }
         dw = DieWhen(
@@ -135,9 +136,14 @@ if __name__=='__main__':
         script=arg_dict.get('script')
         sys.argv = [script] + arg_dict.get('args')
         with open(script) as f:
-            sys.settrace(dw.trace)
             try:
-                exec(f, None, None)
+                code=compile(f.read(), script, 'exec')
+                _globals={
+                    '__name__': '__main__',
+                    '__file__': script
+                }
+                sys.settrace(dw.trace)
+                exec(code, _globals, dict())
             except ConditionalException, e:
                 exc_type, exc_obj, tb = sys.exc_info()
                 f = tb.tb_frame
@@ -145,6 +151,6 @@ if __name__=='__main__':
                 filename = f.f_code.co_filename
                 linecache.checkcache(filename)
                 line = linecache.getline(filename, lineno, f.f_globals)
-                print 'EXCEPTION IN ({}, LINE {} "{}"): {}'.format(filename, lineno, line.strip(), exc_obj)
+                print('EXCEPTION IN ({}, LINE {} "{}"): {}'.format(filename, lineno, line.strip(), exc_obj))
 
 
