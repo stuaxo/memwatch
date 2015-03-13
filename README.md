@@ -14,7 +14,7 @@ If you are working with a leaky program it is best to use 'ulimit' on Linux or O
 
 ```bash
 ulimit -v`calc 1024*1024`
-python -mmemwatch -r40M eat_128mb.py
+python memwatch -r40M eat_128mb.py
 ```
 
 In the example above ulimit is set to 1GB in case something goes really wrong, memwatch is still set to 40mb.

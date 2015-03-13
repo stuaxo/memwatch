@@ -121,7 +121,7 @@ class DieWhen(object):
 
         return self.trace
 
-if __name__=='__main__':
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-r', '--maxrss', action='store', default=0)
     parser.add_argument('-v', '--maxvms', action='store', default=0)
@@ -165,3 +165,5 @@ if __name__=='__main__':
                 print('EXCEPTION IN ({}, LINE {} "{}"): {}'.format(filename, lineno, line.strip(), exc_obj))
 
 
+if __name__=='__main__':
+    main()
